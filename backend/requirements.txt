@@ -5,9 +5,13 @@ pydantic
 python-multipart        # CSV file uploads
 pandas                  # CSV parsing + schema inference
 
-# --- Per-CSV fine-tuning (optional) ---
+# --- ML Fine-Tuning, LoRA & Evaluation (optional/recommended) ---
 # Without these the app still runs fully on the deterministic SQL engine.
 # For GPU training install the CUDA build of torch instead, e.g.:
 #   pip install torch==2.12.0+cu126 --index-url https://download.pytorch.org/whl/cu126
 torch
 transformers
+peft                    # Parameter-Efficient Fine-Tuning (LoRA/QLoRA)
+bitsandbytes            # 4-bit NF4 Quantization
+datasets                # HF Datasets export
+huggingface_hub         # Model & Dataset publishing to HF Hub

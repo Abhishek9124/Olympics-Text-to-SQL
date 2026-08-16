@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  olympics-sql-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: olympics-nl-to-sql
+    ports:
+      - "8000:8000"
+    environment:
+      - AISQL_MAX_UPLOAD_MB=25
+      - AISQL_BASE_MODEL=google/flan-t5-small
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

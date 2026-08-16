@@ -268,7 +268,7 @@ def _train_worker(dataset_id: str) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Serving: lazy-load a trained model per dataset and generate SQL.
+# Serving: lazy-load a trained model per dataset and generate SQL (100% Local).
 # --------------------------------------------------------------------------- #
 _MODELS: dict[str, Any] = {}
 _TOKS: dict[str, Any] = {}
@@ -280,21 +280,35 @@ def generate_sql(dataset_id: str, schema_sig: str, question: str) -> Optional[st
         return None
     try:
         import torch
-        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+        from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM, AutoTokenizer
     except Exception:  # noqa: BLE001
         return None
     try:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if dataset_id not in _MODELS:
             mdir = str(storage.model_dir(dataset_id))
-            _TOKS[dataset_id] = AutoTokenizer.from_pretrained(mdir)
-            _MODELS[dataset_id] = AutoModelForSeq2SeqLM.from_pretrained(mdir).to(device).eval()
+            tok = AutoTokenizer.from_pretrained(mdir, local_files_only=False)
+            try:
+                model = AutoModelForSeq2SeqLM.from_pretrained(mdir).to(device).eval()
+            except Exception:
+                model = AutoModelForCausalLM.from_pretrained(mdir).to(device).eval()
+            _TOKS[dataset_id] = tok
+            _MODELS[dataset_id] = model
+
         tok, model = _TOKS[dataset_id], _MODELS[dataset_id]
         text = build_input(schema_sig, question)
         ids = tok(text, max_length=MAX_IN, truncation=True, return_tensors="pt").to(device)
+
         with torch.no_grad():
-            out = model.generate(**ids, max_length=MAX_OUT, num_beams=4, early_stopping=True)
-        sql = tok.decode(out[0], skip_special_tokens=True).strip()
+            if hasattr(model, "config") and getattr(model.config, "is_encoder_decoder", False):
+                out = model.generate(**ids, max_length=MAX_OUT, num_beams=4, early_stopping=True)
+                sql = tok.decode(out[0], skip_special_tokens=True).strip()
+            else:
+                out = model.generate(**ids, max_new_tokens=128, do_sample=False)
+                gen_text = tok.decode(out[0][ids["input_ids"].shape[1]:], skip_special_tokens=True)
+                sql = gen_text.strip()
+
         return sql or None
     except Exception:  # noqa: BLE001
         return None
+
